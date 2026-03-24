@@ -9,13 +9,38 @@ import (
 	"syscall"
 
 	broker "github.com/budimanlai/go-message-broker"
-	_ "github.com/budimanlai/go-message-broker/adapters/db" // Register DB adapter
+	_ "github.com/budimanlai/go-message-broker/adapters/db"       // Register DB adapter
+	_ "github.com/budimanlai/go-message-broker/adapters/rabbitmq" // Register RabbitMQ adapter
 	"github.com/budimanlai/go-message-broker/eventbus"
 	"github.com/budimanlai/go-pkg/databases"
 )
 
 func main() {
-	runDbExample("ai_ml")
+	// runDbExample("ai_ml")
+	runRabbitMqExample("ocpp")
+}
+
+func runRabbitMqExample(workerName string) {
+	fmt.Printf("=== Running RabbitMQ Example Subscribe - Worker: %s ===\n", workerName)
+
+	// tambahkan contoh setup RabbitMQAdapter jika ingin menggunakan RabbitMQ sebagai broker
+	configMap := map[string]interface{}{
+		"url":         "amqp://admin:admin123@localhost:5672/",
+		"worker_name": workerName,
+	}
+
+	rabbitAdapter, err := broker.New("rabbitmq", configMap)
+	if err != nil {
+		log.Fatalf("Failed to create broker: %v", err)
+	}
+
+	// 2. Connect
+	if err := rabbitAdapter.Connect(); err != nil {
+		log.Fatalf("Failed to connect to %s: %v", "rabbitmq", err)
+	}
+	defer rabbitAdapter.Disconnect()
+
+	runEventBus(rabbitAdapter)
 }
 
 func runDbExample(workerName string) {
