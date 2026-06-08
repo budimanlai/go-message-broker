@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -122,11 +121,7 @@ func (d *DBAdapter) Disconnect() error {
 }
 
 func (d *DBAdapter) Publish(ctx context.Context, topic string, msg broker.Message) error {
-	payloadBytes, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	payload := string(payloadBytes)
+	payload := string(msg.Payload)
 
 	// Optimized fan-out using single SQL query.
 	// We use table alias 'b' to avoid any ambiguity.
@@ -233,13 +228,12 @@ func (d *DBAdapter) poll(ctx context.Context, topic string, handler broker.Handl
 		go func(msg BrokerMessage) {
 			defer wg.Done()
 
-			var brokerMsg broker.Message
+			brokerMsg := broker.Message{
+				Topic:   topic,
+				Headers: make(map[string]string),
+			}
 			if msg.Payload != nil {
-				if err := json.Unmarshal([]byte(*msg.Payload), &brokerMsg); err != nil {
-					log.Printf("Failed to unmarshal message ID %d: %v", msg.ID, err)
-					d.updateStatus(context.Background(), msg.ID, "failed", err.Error())
-					return
-				}
+				brokerMsg.Payload = []byte(*msg.Payload)
 			}
 
 			// Call the handler

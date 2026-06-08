@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -103,11 +102,6 @@ func (r *RabbitMQAdapter) Publish(ctx context.Context, topic string, msg broker.
 		return fmt.Errorf("channel not initialized")
 	}
 
-	body, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
 	return r.pubChannel.PublishWithContext(
 		ctx,
 		defaultExchange,
@@ -116,7 +110,9 @@ func (r *RabbitMQAdapter) Publish(ctx context.Context, topic string, msg broker.
 		false,
 		amqp.Publishing{
 			ContentType: "application/json",
-			Body:        body,
+			MessageId:   msg.ID,
+			Timestamp:   msg.Timestamp,
+			Body:        msg.Payload,
 		},
 	)
 }
@@ -189,11 +185,12 @@ func (r *RabbitMQAdapter) Subscribe(ctx context.Context, topic string, handler b
 					return
 				}
 
-				var m broker.Message
-				if err := json.Unmarshal(d.Body, &m); err != nil {
-					log.Printf("unmarshal error: %v", err)
-					_ = d.Nack(false, false)
-					continue
+				m := broker.Message{
+					ID:        d.MessageId,
+					Topic:     topic,
+					Payload:   d.Body,
+					Headers:   make(map[string]string),
+					Timestamp: d.Timestamp,
 				}
 
 				if err := handler(ctx, m); err != nil {

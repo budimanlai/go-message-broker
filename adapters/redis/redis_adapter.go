@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	broker "github.com/budimanlai/go-message-broker"
@@ -60,11 +59,7 @@ func (r *RedisAdapter) Disconnect() error {
 }
 
 func (r *RedisAdapter) Publish(ctx context.Context, topic string, msg broker.Message) error {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	return r.client.Publish(ctx, topic, data).Err()
+	return r.client.Publish(ctx, topic, msg.Payload).Err()
 }
 
 func (r *RedisAdapter) Subscribe(ctx context.Context, topic string, handler broker.Handler) error {
@@ -80,14 +75,11 @@ func (r *RedisAdapter) Subscribe(ctx context.Context, topic string, handler brok
 	go func() {
 		ch := pubsub.Channel()
 		for msg := range ch {
-			var m broker.Message
-			if err := json.Unmarshal([]byte(msg.Payload), &m); err != nil {
-				// In a real app, perhaps log this error or send to a DLQ
-				fmt.Printf("Error unmarshaling message: %v\n", err)
-				continue
+			m := broker.Message{
+				Topic:   topic,
+				Payload: []byte(msg.Payload),
+				Headers: make(map[string]string),
 			}
-
-			// Call the handler
 			if err := handler(ctx, m); err != nil {
 				fmt.Printf("Handler error: %v\n", err)
 			}
