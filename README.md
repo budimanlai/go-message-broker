@@ -269,6 +269,81 @@ signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 ---
 
+---
+
+## Konfigurasi EventBus: Single Broker vs Multi-Broker (Persiapan)
+
+### Konfigurasi Lama (Single Broker) — tetap berfungsi
+
+```go
+// Satu broker dioper melalui field Broker.
+eb := eventbus.NewEventBus(eventbus.Config{
+    Broker: rabbitAdapter,
+    Topics: map[string]eventbus.TopicConfig{
+        "order.created": {
+            EmitToBroker:      true,
+            ConsumeFromBroker: true,
+        },
+    },
+    WorkerPool: 10,
+    BufferSize: 1000,
+})
+```
+
+### Konfigurasi Baru (Multi-Broker — struktur siap, routing belum aktif)
+
+```go
+import (
+    broker "github.com/budimanlai/go-message-broker"
+    _ "github.com/budimanlai/go-message-broker/adapters/rabbitmq"
+    _ "github.com/budimanlai/go-message-broker/adapters/redis"
+    "github.com/budimanlai/go-message-broker/eventbus"
+)
+
+// Buat masing-masing adapter
+rabbitAdapter, _ := broker.New("rabbitmq", map[string]interface{}{
+    "url":         "amqp://admin:admin123@localhost:5672/",
+    "worker_name": "my-service",
+})
+redisAdapter, _ := broker.New("redis", map[string]interface{}{
+    "addr": "localhost:6379",
+})
+
+eb := eventbus.NewEventBus(eventbus.Config{
+    // Broker lama tetap diisi untuk backward compatibility.
+    Broker: rabbitAdapter,
+
+    // Brokers: named adapters yang akan digunakan untuk routing per-topic di versi mendatang.
+    // Saat ini belum ada efek fungsional — hanya menyimpan referensi adapter.
+    Brokers: map[string]broker.Adapter{
+        "rabbit": rabbitAdapter,
+        "redis":  redisAdapter,
+    },
+
+    Topics: map[string]eventbus.TopicConfig{
+        "order.created": {
+            EmitToBroker:      true,
+            ConsumeFromBroker: true,
+            // Brokers: []string{"rabbit"}, // akan aktif setelah routing layer tersedia
+        },
+        "cache.invalidate": {
+            EmitToBroker:      true,
+            ConsumeFromBroker: true,
+            // Brokers: []string{"redis"}, // akan aktif setelah routing layer tersedia
+        },
+    },
+    WorkerPool: 10,
+    BufferSize: 1000,
+})
+defer eb.Close()
+```
+
+> **Catatan**: Field `Brokers` di `Config` dan `Brokers []string` di `TopicConfig` sudah tersedia
+> untuk konfigurasi, tetapi **routing per-topic belum diimplementasikan**. Semua event masih
+> diteruskan ke `Config.Broker` (field lama). Routing aktif akan hadir di versi berikutnya.
+
+---
+
 ## Struktur Pesan
 
 ```go
