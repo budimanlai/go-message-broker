@@ -10,9 +10,11 @@ type LocalBus struct {
 	subscribers map[string][]Handler
 	channels    map[string]chan Message
 	mu          sync.RWMutex
-
-	workerPool int
-	bufferSize int
+	wg          sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
+	workerPool  int
+	bufferSize  int
 }
 
 func NewLocalBus(workerPool int, bufferSize int) *LocalBus {
@@ -22,10 +24,12 @@ func NewLocalBus(workerPool int, bufferSize int) *LocalBus {
 	if bufferSize <= 0 {
 		bufferSize = 100
 	}
-
+	ctx, cancel := context.WithCancel(context.Background())
 	return &LocalBus{
 		subscribers: make(map[string][]Handler),
 		channels:    make(map[string]chan Message),
+		ctx:         ctx,
+		cancel:      cancel,
 		workerPool:  workerPool,
 		bufferSize:  bufferSize,
 	}
@@ -42,6 +46,7 @@ func (b *LocalBus) Subscribe(topic string, handler Handler) {
 		b.channels[topic] = ch
 
 		for i := 0; i < b.workerPool; i++ {
+			b.wg.Add(1)
 			go b.startWorker(topic, ch)
 		}
 	}
@@ -64,21 +69,29 @@ func (b *LocalBus) Emit(ctx context.Context, topic string, msg Message) error {
 	}
 }
 
-func (b *LocalBus) startWorker(topic string, ch chan Message) {
-	for msg := range ch {
-		b.mu.RLock()
-		handlers := b.subscribers[topic]
-		b.mu.RUnlock()
+// Close signals all workers to stop and waits until they exit.
+func (b *LocalBus) Close() {
+	b.cancel()
+	b.wg.Wait()
+}
 
-		for _, h := range handlers {
-			func(handler Handler) {
-				defer func() {
-					if r := recover(); r != nil {
-						// optional: log panic
-					}
-				}()
-				_ = handler(context.Background(), msg)
-			}(h)
+func (b *LocalBus) startWorker(topic string, ch chan Message) {
+	defer b.wg.Done()
+	for {
+		select {
+		case <-b.ctx.Done():
+			return
+		case msg := <-ch:
+			b.mu.RLock()
+			handlers := b.subscribers[topic]
+			b.mu.RUnlock()
+
+			for _, h := range handlers {
+				func(handler Handler) {
+					defer func() { recover() }() //nolint:errcheck
+					_ = handler(context.Background(), msg)
+				}(h)
+			}
 		}
 	}
 }

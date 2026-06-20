@@ -17,6 +17,7 @@ type broadcastJob struct {
 
 // runBroadcastWorker processes jobs from the broadcast queue until the context is cancelled.
 func (e *eventBus) runBroadcastWorker() {
+	defer e.broadcastWg.Done()
 	for {
 		select {
 		case <-e.ctx.Done():

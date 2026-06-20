@@ -48,6 +48,7 @@ type eventBus struct {
 
 	broadcastQueue       chan broadcastJob
 	broadcastWorkerCount int
+	broadcastWg          sync.WaitGroup
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -155,6 +156,7 @@ func (e *eventBus) Start(ctx context.Context) error {
 		connected[b] = true
 	}
 
+	e.broadcastWg.Add(e.broadcastWorkerCount)
 	for i := 0; i < e.broadcastWorkerCount; i++ {
 		go e.runBroadcastWorker()
 	}
@@ -175,7 +177,6 @@ func (e *eventBus) Emit(ctx context.Context, topic string, msg Message) error {
 		return err
 	}
 
-	e.runAfterPublish(ctx, topic, msg, cfg)
 	return nil
 }
 
@@ -201,6 +202,17 @@ func (e *eventBus) Subscribe(topic string, handler Handler) {
 func (e *eventBus) Close() error {
 	if e.cancel != nil {
 		e.cancel()
+	}
+
+	// Wait for broadcast workers to finish their current job, then drain
+	// any remaining items in the queue before disconnecting brokers.
+	e.broadcastWg.Wait()
+	for len(e.broadcastQueue) > 0 {
+		e.publishSync(<-e.broadcastQueue)
+	}
+
+	if e.local != nil {
+		e.local.Close()
 	}
 
 	disconnected := map[broker.Adapter]bool{}
@@ -260,9 +272,6 @@ func (e *eventBus) broadcast(topic string, msg Message, cfg TopicConfig) error {
 	}
 	return nil
 }
-
-// runAfterPublish is the extension point for post-publish hooks (metrics, logging, middleware).
-func (e *eventBus) runAfterPublish(_ context.Context, _ string, _ Message, _ TopicConfig) {}
 
 // publishToDefaultBroker sends asynchronously via Config.Broker (backward-compat path).
 func (e *eventBus) publishToDefaultBroker(topic string, msg Message) {

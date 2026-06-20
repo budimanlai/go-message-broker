@@ -19,9 +19,8 @@ type FallbackAdapter interface {
 	Store(ctx context.Context, failed FailedPublish) error
 }
 
-// FallbackConfig configures what happens when a broker publish fails.
-// MaxRetry is reserved for future retry support and has no effect yet.
+// FallbackConfig configures the adapter used to store failed messages.
+// Subscribe-side retry is configured separately via TopicConfig.Retry.
 type FallbackConfig struct {
-	MaxRetry int
-	Adapter  FallbackAdapter
+	Adapter FallbackAdapter
 }
