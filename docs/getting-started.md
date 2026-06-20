@@ -33,7 +33,10 @@ go get github.com/budimanlai/go-message-broker
 
 **EventBus** — layer di atas Broker. Gunakan ini jika Anda butuh:
 - Memproses event secara lokal (in-process, tanpa network) sekaligus mengirim ke broker eksternal
-- Routing event ke beberapa topic
+- Multi-broker routing (satu topic → beberapa broker sekaligus)
+- Middleware per topic (BeforeHandle / AfterHandle)
+- Retry otomatis dengan delay
+- Fallback storage saat publish atau handling gagal
 - Pipeline event yang kompleks
 
 ## Adapter yang Tersedia
@@ -74,7 +77,11 @@ go-message-broker/
 │   └── db/            # Adapter Database (MySQL/PostgreSQL)
 ├── eventbus/
 │   ├── eventbus.go    # EventBus — routing lokal + broker
-│   └── localbus.go    # LocalBus — worker pool in-process
+│   ├── localbus.go    # LocalBus — worker pool in-process
+│   ├── middleware.go  # Interface Middleware
+│   ├── retry.go       # RetryPolicy
+│   ├── fallback.go    # FallbackAdapter, FallbackConfig, FailedPublish
+│   └── worker.go      # Broadcast worker pool
 └── examples/
     ├── eventbus_pub/  # Contoh publisher
     └── eventbus_sub/  # Contoh subscriber (service terpisah)
