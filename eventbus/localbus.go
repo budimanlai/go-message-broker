@@ -69,10 +69,26 @@ func (b *LocalBus) Emit(ctx context.Context, topic string, msg Message) error {
 	}
 }
 
-// Close signals all workers to stop and waits until they exit.
+// Close signals all workers to stop, waits until they exit, then drains any
+// messages still sitting in channel buffers so they are not silently dropped.
 func (b *LocalBus) Close() {
 	b.cancel()
 	b.wg.Wait()
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	for topic, ch := range b.channels {
+		handlers := b.subscribers[topic]
+		for len(ch) > 0 {
+			msg := <-ch
+			for _, h := range handlers {
+				func(handler Handler) {
+					defer func() { recover() }() //nolint:errcheck
+					_ = handler(context.Background(), msg)
+				}(h)
+			}
+		}
+	}
 }
 
 func (b *LocalBus) startWorker(topic string, ch chan Message) {

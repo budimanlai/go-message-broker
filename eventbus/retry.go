@@ -6,10 +6,10 @@ import (
 )
 
 // RetryPolicy defines how many times a handler is retried on failure.
-// Delay is reserved for future timed-backoff support and has no effect yet.
+// Delay is the wait between attempts; zero means retry immediately.
 type RetryPolicy struct {
 	MaxRetry int
-	Delay    time.Duration // future-ready: not applied yet
+	Delay    time.Duration
 }
 
 // applyRetry wraps handler with a retry loop governed by policy.
@@ -31,6 +31,9 @@ func applyRetry(handler Handler, policy *RetryPolicy, fallback *FallbackConfig, 
 		for attempt := 0; attempt <= policy.MaxRetry; attempt++ {
 			if lastErr = handler(ctx, msg); lastErr == nil {
 				return nil
+			}
+			if policy.Delay > 0 && attempt < policy.MaxRetry {
+				time.Sleep(policy.Delay)
 			}
 		}
 
