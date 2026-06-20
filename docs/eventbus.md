@@ -210,6 +210,19 @@ Ketika `WorkerPool > 0`, EventBus membuat `LocalBus` dengan worker pool dan buff
 - Jika buffer penuh saat `Emit`, akan mengembalikan error `"localbus buffer full for topic: ..."`.
 - Jika handler panic, panic di-recover dan pesan berikutnya tetap diproses.
 
+## Memulai EventBus dengan `Start`
+
+`EventBus` memiliki method opsional `Start(ctx context.Context) error` yang memanggil `Connect` pada broker secara otomatis:
+
+```go
+if err := eb.Start(ctx); err != nil {
+    log.Fatal(err)
+}
+defer eb.Close()
+```
+
+Alternatifnya, Anda bisa memanggil `Connect` pada adapter secara manual sebelum membuat EventBus (seperti pada contoh-contoh di atas) — keduanya setara. Hindari memanggil keduanya sekaligus agar tidak terjadi koneksi ganda.
+
 ## Menutup EventBus
 
 ```go

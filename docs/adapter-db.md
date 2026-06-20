@@ -139,9 +139,9 @@ b, err := broker.New("db", map[string]interface{}{
 pending ──► processing ──► done
                 │
                 └──► pending (retry, jika retry_count < max_retry)
-                │
-                └──► failed (jika retry_count >= max_retry atau unmarshal error)
 ```
+
+Pesan yang telah mencapai `retry_count >= max_retry` tidak lagi diambil oleh poller (dikecualikan oleh WHERE clause), namun statusnya tetap `pending` di database — tidak berubah menjadi `failed`. Ini memudahkan debugging karena baris masih terlihat, tapi perlu diperhatikan agar tabel tidak menumpuk baris yang tidak terproses.
 
 ## Fan-out ke Beberapa Service
 
